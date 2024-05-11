@@ -1,5 +1,4 @@
-﻿using BepInEx.Logging;
-using HarmonyLib;
+﻿using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +8,6 @@ using UnityEngine;
 
 namespace BetterScrapScan.Patches
 {
-
     [HarmonyPatch(typeof(Terminal))]
     internal class TerminalPatch
     {
@@ -17,20 +15,28 @@ namespace BetterScrapScan.Patches
         [HarmonyPostfix]
         static void ScanForItemsPatch(ref string modifiedDisplayText, ref TerminalNode node, Terminal __instance)
         {
-            string modifiedText = modifiedDisplayText;
-            ManualLogSource logger = BepInEx.Logging.Logger.CreateLogSource("TextPostProcess");
+            string displayText = modifiedDisplayText;
 
             if (node.displayText.ToString().Contains("[scanForItems]"))
             {
                 List<ItemCount> listedItems = new List<ItemCount>();
                 GrabbableObject[] items = UnityEngine.Object.FindObjectsOfType<GrabbableObject>();
 
-                for (int index = 0; index < items.Length; index++)
-                {
-                    GrabbableObject item = items[index];
+                System.Random random = new System.Random(StartOfRound.Instance.randomMapSeed + 91);
+                int totalItems = 0;
+                int approximateTotal = 0;
+                GrabbableObject[] array = UnityEngine.Object.FindObjectsOfType<GrabbableObject>();
 
-                    if (item.itemProperties.isScrap && !item.isInShipRoom && !items[index].isInElevator)
+                for (int num5 = 0; num5 < array.Length; num5++)
+                {
+                    GrabbableObject item = array[num5];
+
+                    if (item.itemProperties.isScrap && !item.isInShipRoom && !item.isInElevator)
                     {
+                        int approximateItemValue = Mathf.Clamp(random.Next(item.itemProperties.minValue, item.itemProperties.maxValue), item.scrapValue - 6 * num5, item.scrapValue + 9 * num5);
+                        approximateTotal += approximateItemValue;
+                        totalItems++;
+
                         bool itemAlreadyListed = listedItems.Exists(listedItem => listedItem.itemName == item.itemProperties.itemName);
 
                         if (itemAlreadyListed)
@@ -42,17 +48,18 @@ namespace BetterScrapScan.Patches
                                 ItemCount listedItemToEdit = listedItems[listedItemIndex];
 
                                 listedItemToEdit.count++;
+                                listedItemToEdit.approximateValue += approximateItemValue;
 
                                 listedItems[listedItemIndex] = listedItemToEdit;
                             }
-                        } else
+                        }
+                        else
                         {
                             ItemCount itemCount = new ItemCount
                             {
                                 count = 1,
                                 itemName = item.itemProperties.itemName,
-                                minValue = item.itemProperties.minValue,
-                                maxValue = item.itemProperties.maxValue,
+                                approximateValue = approximateItemValue
                             };
 
                             listedItems.Add(itemCount);
@@ -60,14 +67,23 @@ namespace BetterScrapScan.Patches
                     }
                 }
 
-                modifiedText += "\n\n Items:";
+                if (listedItems.Count() > 0)
+                {
+                    displayText = $"\n\n\n\nTotal items found: {totalItems}";
+                    displayText += $"\nTotal approximate value: ${approximateTotal}";
+                    displayText += "\n\nItems:";
 
-                listedItems.ForEach(item => {
-                    modifiedText += $"\n {item.itemName} x{item.count} (${item.minValue} ~ ${item.maxValue})";
-                });
+                    listedItems.ForEach(item => {
+                        displayText += $"\n  {item.itemName}  x{item.count}  (${item.approximateValue})";
+                    });
+                }
+                else
+                {
+                    displayText = $"\n\n\n\nNo items found.";
+                }
 
-                __instance.screenText.text = modifiedText;
-                __instance.currentText = modifiedText;
+                __instance.screenText.text = displayText;
+                __instance.currentText = displayText;
             }
         }
     }

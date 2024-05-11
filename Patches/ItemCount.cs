@@ -4,7 +4,6 @@
     {
         public int count;
         public string itemName;
-        public int minValue;
-        public int maxValue;
+        public int approximateValue;
     }
 }
